@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pinoy Recipe App (Offline)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #fff8f0;
+    }
+    header {
+      background-color: #c62828;
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    #searchBar {
+      margin-top: 10px;
+      padding: 0.5rem;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 4px;
+      border: none;
+      font-size: 16px;
+    }
+    main {
+      padding: 1rem;
+    }
+    .recipe {
+      background: white;
+      margin-bottom: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      overflow: hidden; /* This is crucial for rounding the image corners */
+      transition: transform 0.2s ease-in-out;
+    }
+    .recipe:hover {
+        transform: scale(1.02); /* Adds a subtle zoom effect on hover */
+    }
+    .recipe-image {
+        width: 100%;
+        height: 220px;
+        object-fit: cover; /* Ensures the image covers the area without distortion */
+        display: block;
+    }
+    .recipe-content {
+        padding: 1rem;
+    }
+    .recipe h2 {
+      color: #c62828;
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+    }
+    .section-title {
+      font-weight: bold;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pinoy Recipe App (Offline)</h1>
+    <input type="text" id="searchBar" placeholder="Search for a recipe..." />
+  </header>
+
+  <main id="recipeList"></main>
+
+  <script>
+    // This function generates an offline SVG placeholder image as a Data URL
+    function createOfflineImage(text) {
+        // Clean the text to prevent breaking the SVG markup
+        const cleanText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const svg = `<svg width="600" height="400" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg"><rect fill="#c62828" x="0" y="0" width="600" height="400"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" fill="#FFF">${cleanText}</text></svg>`;
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }
+
+    // Original recipe data
+    const recipes = [
+      {
+        name: "Adobo",
+        image: "", // Placeholder, will be generated
+        boilingTime: "10 minutes",
+        cookingTime: "40 minutes",
+        ingredients: ["1 kg pork or chicken", "1/2 cup soy sauce", "1/2 cup vinegar", "6 cloves garlic, crushed", "1 tsp peppercorn", "2 bay leaves", "1 cup water"],
+        steps: ["Marinate meat in soy sauce, garlic, and pepper for 30 minutes.", "Place meat and marinade in a pot, add vinegar, bay leaves, and water.", "Bring to a boil for 10 minutes.", "Simmer uncovered for 30 minutes or until tender.", "Serve with rice."]
+      },
+      {
+        name: "Sinigang na Baboy",
+        image: "",
+        boilingTime: "15 minutes",
+        cookingTime: "45 minutes",
+        ingredients: ["1 kg pork belly", "1 pack sinigang mix", "1 onion, quartered", "2 tomatoes, sliced", "1 radish, sliced", "Kangkong", "Water"],
+        steps: ["Boil pork in water until scum rises.", "Add onions and tomatoes, boil for another 15 minutes.", "Add radish and simmer for 10 minutes.", "Add sinigang mix and kangkong. Simmer for 5 more minutes.", "Serve hot."]
+      },
+      {
+        name: "Lechon Kawali",
+        image: "",
+        boilingTime: "1 hour",
+        cookingTime: "30 minutes",
+        ingredients: ["1 kg pork belly", "Salt", "Pepper", "Garlic", "Water", "Oil for frying"],
+        steps: ["Boil pork belly with salt, pepper, garlic for 1 hour or until tender.", "Let pork cool and dry.", "Deep fry until golden and crispy.", "Drain excess oil and chop before serving."]
+      },
+      {
+        name: "Kare-Kare",
+        image: "",
+        boilingTime: "1 hour", // Note: Oxtail can take 2-3 hours to become tender
+        cookingTime: "30 minutes",
+        ingredients: ["1 kg oxtail or beef shank", "1 banana heart, sliced", "String beans, cut", "Eggplant, sliced", "1/2 cup peanut butter", "1/4 cup toasted rice flour", "Annatto seeds", "Bagoong for serving"],
+        steps: ["Boil oxtail until tender (can take 2-3 hours).", "Soak annatto seeds in warm water and strain for coloring.", "Sauté garlic and onion, add meat and annatto water.", "Add peanut butter and rice flour to thicken.", "Add vegetables and cook until soft.", "Serve with bagoong."]
+      },
+      {
+        name: "Tinolang Manok",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "25 minutes",
+        ingredients: ["1 whole chicken, cut into pieces", "1 thumb ginger, sliced", "2 cups green papaya, sliced", "1 onion", "Malunggay or chili leaves", "Fish sauce", "Water"],
+        steps: ["Sauté ginger, onion, and chicken until lightly browned.", "Add fish sauce and water, bring to a boil.", "Boil for 10 minutes.", "Add green papaya and cook until tender.", "Add malunggay leaves and serve hot."]
+      },
+      {
+        name: "Pancit Canton",
+        image: "",
+        boilingTime: "5 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["250g pancit canton noodles", "1 tbsp oil", "1 onion, sliced", "3 cloves garlic, minced", "200g chicken or pork, sliced thin", "1 cup mixed vegetables (cabbage, carrots, snow peas)", "1/4 cup soy sauce", "1/4 cup oyster sauce", "1 cup chicken broth", "Salt and pepper to taste"],
+        steps: ["Cook pancit canton noodles according to package directions, drain, and set aside.", "In a large pan, heat oil and sauté onion and garlic until fragrant.", "Add chicken or pork and cook until browned.", "Add mixed vegetables and cook until slightly tender-crisp.", "Pour in soy sauce, oyster sauce, and chicken broth. Bring to a simmer.", "Add cooked noodles and toss until well coated and liquid is absorbed.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Lumpia Shanghai",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes",
+        ingredients: ["500g ground pork", "1 onion, minced", "2 carrots, grated", "1 egg", "1/4 cup chopped spring onions", "1 tsp garlic powder", "Salt and pepper to taste", "30-40 lumpia wrappers", "Oil for frying"],
+        steps: ["In a bowl, combine ground pork, onion, carrots, egg, spring onions, garlic powder, salt, and pepper. Mix well.", "Lay out a lumpia wrapper. Place a spoonful of the meat mixture near one end, shaping it into a log.", "Fold the sides in, then roll tightly from the bottom up. Seal the edge with a little water.", "Heat oil in a deep pan. Fry lumpia in batches until golden brown and cooked through.", "Drain on paper towels. Serve with sweet and sour sauce."]
+      },
+      {
+        name: "Arroz Caldo",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "40 minutes",
+        ingredients: ["1 cup glutinous rice", "6 cups chicken broth", "2 tbsp cooking oil", "1 onion, chopped", "4 cloves garlic, minced", "1 thumb-sized ginger, julienned", "500g chicken breast or thighs, shredded", "Fish sauce to taste", "Salt and pepper", "Hard-boiled eggs, fried garlic, chopped spring onions for garnish"],
+        steps: ["Wash rice thoroughly. Set aside.", "In a large pot, heat oil. Sauté onion, garlic, and ginger until fragrant.", "Add chicken and cook until no longer pink. Season with fish sauce.", "Add the washed rice and stir for a few minutes.", "Pour in chicken broth. Bring to a boil, then lower heat and simmer, stirring occasionally, until rice is cooked and porridge thickens.", "Season with more fish sauce, salt, and pepper as needed.", "Serve hot, garnished with hard-boiled eggs, fried garlic, and spring onions."]
+      },
+      {
+        name: "Bicol Express",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g pork belly, diced", "3-4 cups coconut milk (first and second extraction)", "5-10 siling labuyo (bird's eye chilies), sliced", "1/2 cup bagoong alamang (shrimp paste)", "1 onion, chopped", "6 cloves garlic, minced", "1 thumb-sized ginger, julienned"],
+        steps: ["In a pot, combine diced pork belly, garlic, onion, ginger, and first extraction of coconut milk. Bring to a boil.", "Lower heat and simmer until pork is tender, stirring occasionally to prevent sticking.", "Add the second extraction of coconut milk and bagoong alamang. Stir well.", "Add sliced chilies. Continue to simmer until the sauce thickens and oil renders from the coconut milk.", "Adjust seasoning if needed. Serve hot with rice."]
+      },
+      {
+        name: "Laing",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "45 minutes",
+        ingredients: ["1 pack dried taro leaves (gabi leaves)", "4 cups coconut milk (thick)", "1 cup coconut cream (kakang gata)", "1 onion, chopped", "6 cloves garlic, minced", "1 thumb-sized ginger, julienned", "2-3 siling labuyo (bird's eye chilies), sliced", "1/4 cup bagoong alamang (shrimp paste)", "Pork belly, diced (optional)"],
+        steps: ["In a large pot, combine dried taro leaves, coconut milk, garlic, onion, ginger, chilies, and bagoong alamang. If using pork, add it now.", "Bring to a gentle boil over medium heat, stirring gently and only occasionally to prevent curdling. Do not stir too much once the leaves are added to avoid itchiness.", "Lower heat and simmer, uncovered, until the leaves are tender and most of the liquid has been absorbed.", "Pour in the coconut cream and continue to cook until the sauce thickens and becomes creamy.", "Serve hot with rice."]
+      },
+      {
+        name: "Caldereta (Beef)",
+        image: "",
+        boilingTime: "2 hours",
+        cookingTime: "45 minutes",
+        ingredients: ["1 kg beef stew cuts", "1/2 cup tomato paste", "4 cups beef broth", "2 potatoes, cubed", "2 carrots, sliced", "1 red bell pepper, sliced", "1 green bell pepper, sliced", "1/4 cup liver spread", "1/2 cup cheese, grated", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a large pot, boil beef until tender (about 2 hours or more, or use a pressure cooker). Set aside broth.", "In a separate pot, heat oil and sauté onion and garlic until fragrant.", "Add beef and cook until lightly browned. Stir in tomato paste.", "Pour in beef broth. Bring to a simmer, then add potatoes and carrots.", "Cook until vegetables are tender. Stir in liver spread and grated cheese until melted and sauce thickens.", "Add bell peppers and cook for another 5-7 minutes. Season with salt and pepper.", "Serve hot."]
+      },
+      {
+        name: "Menudo",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes",
+        ingredients: ["500g pork, diced", "250g pork liver, diced", "1/2 cup tomato sauce", "1/4 cup soy sauce", "1/4 cup calamansi juice or vinegar", "2 potatoes, cubed", "1 carrot, cubed", "1 red bell pepper, diced", "1 green bell pepper, diced", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "1/2 cup garbanzo beans (chickpeas)", "Salt and pepper to taste"],
+        steps: ["Marinate pork in soy sauce and calamansi juice for 30 minutes.", "In a pan, heat oil and sauté onion and garlic until fragrant.", "Add marinated pork and cook until lightly browned.", "Pour in tomato sauce and enough water to cover. Bring to a simmer.", "Add potatoes and carrots. Cook until vegetables are almost tender.", "Add pork liver, bell peppers, and garbanzo beans. Cook until liver is done and sauce has thickened.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Pork Sinigang",
+        image: "",
+        boilingTime: "15 minutes",
+        cookingTime: "45 minutes",
+        ingredients: ["1 kg pork belly, cut into cubes", "1 pack sinigang mix (tamarind soup base)", "1 onion, quartered", "2 tomatoes, quartered", "1 radish (labanos), sliced", "1 eggplant, sliced", "Long beans (sitaw), cut into 2-inch pieces", "Kangkong (water spinach)", "4-6 cups water or rice washing", "Fish sauce to taste"],
+        steps: ["In a large pot, place pork belly and water. Bring to a boil and remove scum.", "Add onion and tomatoes. Simmer until pork is tender (about 30-40 minutes).", "Add sinigang mix and radish. Cook for 5 minutes.", "Add eggplant and long beans. Cook until vegetables are tender-crisp.", "Stir in kangkong leaves and cook for 1-2 minutes.", "Season with fish sauce to taste. Serve hot."]
+      },
+      {
+        name: "Chicken Adobo",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["1 kg chicken pieces", "1/2 cup soy sauce", "1/2 cup vinegar", "1 head garlic, crushed", "1 tsp black peppercorns", "2 bay leaves", "1 cup water or chicken broth", "2 tbsp cooking oil"],
+        steps: ["In a bowl, marinate chicken in soy sauce, vinegar, crushed garlic, peppercorns, and bay leaves for at least 30 minutes (or overnight).", "In a pot, heat oil. Brown chicken pieces on all sides.", "Pour in the marinade and water/broth. Bring to a boil.", "Lower heat, cover, and simmer for 20-25 minutes or until chicken is tender. Uncover and continue simmering until sauce thickens to your desired consistency.", "Serve hot with rice."]
+      },
+      {
+        name: "Bulalo",
+        image: "",
+        boilingTime: "3-4 hours",
+        cookingTime: "30 minutes",
+        ingredients: ["1.5 kg beef shanks with bone marrow", "1 large onion, quartered", "1 whole peppercorn", "1/2 head cabbage, quartered", "4-5 pcs corn on the cob, cut into 2-inch pieces", "String beans (baguio beans), trimmed", "Pechay or bok choy", "Fish sauce to taste", "Water for boiling"],
+        steps: ["In a large pot, place beef shanks and cover with water. Bring to a boil, then discard the first boil.", "Refill with fresh water, add onion and peppercorns. Bring to a boil, then lower heat and simmer for 3-4 hours or until beef is very tender.", "Add corn on the cob and cook for 10-15 minutes.", "Add string beans and cabbage. Cook until tender-crisp.", "Add pechay and cook for 1-2 minutes until wilted.", "Season with fish sauce to taste. Serve hot with a dipping sauce of calamansi and fish sauce."]
+      },
+      {
+        name: "Crispy Pata",
+        image: "",
+        boilingTime: "2-3 hours",
+        cookingTime: "30-45 minutes",
+        ingredients: ["1 whole pork hock (pata), cleaned and scored", "1 head garlic, crushed", "1 onion, quartered", "2 bay leaves", "1 tsp black peppercorns", "Salt to taste", "Water for boiling", "Oil for deep frying"],
+        steps: ["In a large pot, combine pork hock, crushed garlic, onion, bay leaves, peppercorns, and salt. Cover with water.", "Bring to a boil, then lower heat and simmer for 2-3 hours or until pork is very tender.", "Remove pork hock from liquid and drain well. Pat dry completely. Air dry or refrigerate for a few hours until skin is very dry.", "In a deep pot or wok, heat a generous amount of oil for deep frying. Carefully lower the dried pork hock into the hot oil.", "Deep fry over medium-high heat, constantly basting the skin with hot oil, until golden brown, crispy, and crackling.", "Remove from oil, drain on paper towels. Chop into serving pieces and serve with a dipping sauce of spiced vinegar."]
+      },
+      {
+        name: "Pork Sisig",
+        image: "",
+        boilingTime: "30 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["500g pork jowl and/or ears", "1 large onion, chopped", "2-3 siling labuyo (bird's eye chilies), chopped (adjust to taste)", "1/4 cup calamansi juice", "1/4 cup soy sauce", "2 tbsp mayonnaise (optional)", "1 tbsp butter or cooking oil", "Salt and pepper to taste", "Egg (optional, for topping)", "Spring onions for garnish"],
+        steps: ["Boil pork jowl/ears in water with a bit of salt until tender (about 30 minutes). Drain well.", "Grill or pan-fry the boiled pork until crispy and lightly charred. Chop into small pieces.", "In a hot skillet or sizzling plate, melt butter or heat oil. Add the chopped pork.", "Add chopped onions and chilies. Sauté for a few minutes.", "Stir in calamansi juice and soy sauce. Mix well.", "If using, stir in mayonnaise until combined.", "Season with salt and pepper. If desired, crack an egg on top and cook until set. Garnish with spring onions.", "Serve immediately."]
+      },
+      {
+        name: "Ginataang Manok",
+        image: "",
+        boilingTime: "5 minutes",
+        cookingTime: "35 minutes",
+        ingredients: ["1 kg chicken, cut into pieces", "2 cups coconut milk (thick)", "1 cup coconut cream (kakang gata)", "1 thumb-sized ginger, julienned", "1 onion, chopped", "4 cloves garlic, minced", "2-3 green chilies (siling haba), optional", "1 tbsp fish sauce", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pot, heat oil and sauté ginger, onion, and garlic until fragrant.", "Add chicken and cook until lightly browned.", "Pour in coconut milk and fish sauce. Bring to a simmer.", "Add green chilies if using. Cook until chicken is tender and sauce slightly thickens (about 20-25 minutes).", "Pour in coconut cream and continue to simmer gently, stirring occasionally, until the sauce reduces and becomes creamy. Do not boil rapidly once cream is added.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Pinakbet",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["200g pork belly, sliced (optional)", "1/4 cup bagoong isda (fermented fish paste)", "1 bitter gourd (ampalaya), sliced", "1 eggplant, sliced", "1 squash (kalabasa), cubed", "Okra, trimmed", "String beans (sitaw), cut into pieces", "1 tomato, quartered", "1 onion, sliced", "3 cloves garlic, minced", "2 tbsp cooking oil", "1 cup water or rice washing"],
+        steps: ["In a pot, heat oil and sauté garlic, onion, and pork belly (if using) until pork renders fat.", "Add bagoong isda and sauté for a few minutes.", "Add water. Bring to a simmer.", "Add squash and cook until almost tender.", "Add eggplant, bitter gourd, okra, string beans, and tomato.", "Cook, preferably without stirring too much initially, until vegetables are tender-crisp. You can gently mix after a few minutes.", "Serve hot."]
+      },
+      {
+        name: "Chopsuey",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["200g chicken breast or pork, sliced thin", "100g shrimp, peeled and deveined (optional)", "1 tbsp cooking oil", "1 onion, sliced", "3 cloves garlic, minced", "1 cup cauliflower florets", "1 cup broccoli florets", "1 carrot, sliced diagonally", "1 bell pepper (any color), sliced", "1/2 cup snow peas (sitsaro)", "1/4 cup cornstarch slurry (1 tbsp cornstarch dissolved in 1/4 cup water)", "1/4 cup soy sauce", "1 tbsp oyster sauce", "1 cup chicken broth", "Salt and pepper to taste"],
+        steps: ["In a large pan or wok, heat oil. Sauté garlic and onion until fragrant.", "Add chicken/pork and cook until lightly browned. Add shrimp if using, cook until pink.", "Add all hardier vegetables (carrots, cauliflower, broccoli). Stir-fry for 3-5 minutes.", "Add bell pepper and snow peas. Continue to stir-fry.", "Pour in soy sauce, oyster sauce, and chicken broth. Bring to a simmer.", "Slowly pour in cornstarch slurry, stirring constantly until sauce thickens.", "Season with salt and pepper. Serve immediately."]
+      },
+      {
+        name: "Palabok",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g bihon (rice vermicelli) noodles", "For the Sauce:", "1/2 cup ground pork", "1/4 cup tinapa (smoked fish) flakes, or tinapa paste", "2 tbsp cooking oil", "1 onion, chopped", "4 cloves garlic, minced", "1/2 cup shrimp broth or water", "2 tbsp annatto powder dissolved in 1/4 cup water", "1/4 cup cornstarch slurry", "Fish sauce to taste", "Salt and pepper", "Garnish:", "Cooked shrimp, hard-boiled eggs (sliced), chicharon (pork cracklings, crushed), spring onions, fried garlic, calamansi"],
+        steps: ["Cook bihon noodles according to package directions. Drain and set aside.", "For the sauce: In a pan, heat oil and sauté garlic and onion until fragrant.", "Add ground pork and cook until browned. Add tinapa flakes/paste and cook for a few minutes.", "Pour in shrimp broth/water and annatto water. Bring to a simmer.", "Slowly pour in cornstarch slurry, stirring constantly until sauce thickens. Season with fish sauce, salt, and pepper.", "To serve: Place cooked noodles on a plate, generously spoon sauce over them. Garnish with shrimp, sliced eggs, chicharon, spring onions, fried garlic, and a squeeze of calamansi."]
+      },
+      {
+        name: "Ginataang Gulay with Hipon",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "25 minutes",
+        ingredients: ["500g mixed vegetables (e.g., squash, string beans, eggplant, okra)", "250g shrimp, peeled and deveined", "2 cups coconut milk", "1 thumb-sized ginger, julienned", "1 onion, chopped", "3 cloves garlic, minced", "2-3 green chilies (optional)", "1 tbsp fish sauce", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pot, heat oil and sauté ginger, onion, and garlic until fragrant.", "Add shrimp and cook until pink. Remove from pan and set aside.", "Add hardier vegetables (like squash) to the pan. Sauté for a few minutes.", "Pour in coconut milk and fish sauce. Bring to a simmer.", "Add remaining vegetables (string beans, eggplant, okra, green chilies if using). Cook until vegetables are tender-crisp.", "Return the cooked shrimp to the pot. Stir gently and cook for 1-2 minutes to heat through.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Bistek Tagalog",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["500g beef sirloin, thinly sliced", "1/2 cup soy sauce", "1/4 cup calamansi juice (or lemon juice)", "2 large onions, sliced into rings", "2 tbsp cooking oil", "Salt and black pepper to taste"],
+        steps: ["Marinate beef slices in soy sauce and calamansi juice for at least 30 minutes (or longer, up to 2 hours).", "Heat oil in a pan. Fry half of the onion rings until lightly browned. Remove and set aside for garnish.", "In the same pan, brown beef slices in batches. Do not overcrowd the pan. Remove beef and set aside.", "Pour the beef marinade into the pan. Bring to a simmer and let it reduce slightly.", "Return the beef to the pan and cook for 1-2 minutes, coating with the sauce. Do not overcook.", "Season with salt and pepper. Arrange beef on a plate and top with the reserved fried onion rings.", "Serve hot with rice."]
+      },
+      {
+        name: "Ginataang Kalabasa at Sitaw",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "25 minutes",
+        ingredients: ["500g squash (kalabasa), cubed", "250g string beans (sitaw), cut into 2-inch pieces", "2 cups coconut milk (thick)", "1 thumb-sized ginger, julienned", "1 onion, chopped", "3 cloves garlic, minced", "1/4 cup sliced pork belly or shrimp (optional)", "1 tbsp fish sauce", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pot, heat oil. Sauté ginger, onion, and garlic until fragrant.", "If using pork or shrimp, add them and cook until lightly browned/pink. Remove and set aside if using shrimp.", "Add squash to the pot. Sauté for a few minutes.", "Pour in coconut milk and fish sauce. Bring to a simmer. Cook until squash is almost tender.", "Add string beans. Cook until vegetables are tender-crisp.", "If removed, return pork/shrimp to the pot. Simmer for another few minutes until sauce thickens slightly.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Dinuguan",
+        image: "",
+        boilingTime: "20 minutes",
+        cookingTime: "40 minutes",
+        ingredients: ["500g pork (snout, ears, intestines, or lean meat), diced", "2 cups pork blood", "1/2 cup vinegar", "1 onion, chopped", "6 cloves garlic, minced", "2-3 green chilies (siling haba), whole or sliced", "1 thumb-sized ginger, julienned", "2 tbsp cooking oil", "Fish sauce to taste", "Salt and pepper to taste"],
+        steps: ["Boil pork parts until tender. Drain and chop into small pieces. Set aside.", "In a bowl, mix pork blood with a little vinegar to prevent coagulation. Strain if desired.", "In a pot, heat oil. Sauté ginger, garlic, and onion until fragrant.", "Add chopped pork and sauté until lightly browned.", "Pour in remaining vinegar. Let it boil without stirring for 2-3 minutes to cook off the raw vinegar taste.", "Add pork blood, stirring constantly to prevent lumps. Add a little water if too thick.", "Add green chilies. Simmer over low heat, stirring occasionally, until the blood is cooked and the sauce has thickened (about 15-20 minutes).", "Season with fish sauce, salt, and pepper. Serve hot, traditionally with puto (steamed rice cake)."]
+      },
+      {
+        name: "Paksiw na Lechon",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["500g leftover lechon (roasted pig), chopped into serving pieces", "1/2 cup lechon sauce (e.g., Mang Tomas)", "1/4 cup vinegar", "1/4 cup soy sauce", "2 cups water or lechon stock", "1 head garlic, crushed", "1 onion, sliced", "1 tsp black peppercorns", "2 bay leaves", "1 tbsp brown sugar (optional, for balance)"],
+        steps: ["In a pot, combine lechon pieces, crushed garlic, onion, bay leaves, peppercorns, lechon sauce, vinegar, soy sauce, and water/stock.", "Bring to a boil, then lower heat and simmer for 20-30 minutes, or until the sauce has thickened and the lechon is heated through and flavors have melded.", "Add brown sugar if desired, to balance the taste.", "Serve hot."]
+      },
+      {
+        name: "Batchoy",
+        image: "",
+        boilingTime: "1 hour",
+        cookingTime: "30 minutes",
+        ingredients: ["250g fresh miki noodles (egg noodles)", "100g pork belly, boiled and sliced thinly", "100g pork liver, sliced thin", "50g pork cracklings (chicharon), crushed", "4 cups rich pork broth", "1/4 cup pork intestines, boiled and chopped (optional)", "2 cloves garlic, minced and fried for garnish", "1/4 cup chopped spring onions", "Salt and pepper to taste", "Fish sauce for seasoning"],
+        steps: ["Prepare rich pork broth by boiling pork bones for at least 1-2 hours.", "Blanch miki noodles in hot water for 1-2 minutes until tender. Drain.", "In a bowl, arrange blanched noodles, sliced pork belly, pork liver, and pork intestines (if using).", "Pour hot pork broth over the ingredients.", "Garnish generously with fried garlic, crushed chicharon, and chopped spring onions.", "Season with fish sauce, salt, and pepper to taste. Serve immediately."]
+      },
+      {
+        name: "Lomi",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "25 minutes",
+        ingredients: ["250g fresh lomi noodles (thick egg noodles)", "200g chicken or pork, sliced thin", "100g kikiam or fishball, sliced", "1 egg, beaten", "4 cups chicken or pork broth", "2 tbsp cornstarch slurry (1 tbsp cornstarch dissolved in 2 tbsp water)", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "Soy sauce, fish sauce, salt, pepper to taste", "Chopped spring onions for garnish"],
+        steps: ["In a pot, heat oil and sauté garlic and onion until fragrant.", "Add chicken/pork and cook until lightly browned.", "Add sliced kikiam/fishball. Sauté for a few minutes.", "Pour in chicken/pork broth. Bring to a boil.", "Add lomi noodles and cook until almost tender.", "Slowly pour in cornstarch slurry, stirring constantly until the soup thickens to desired consistency.", "Slowly drizzle in beaten egg while stirring gently to create egg strands.", "Season with soy sauce, fish sauce, salt, and pepper. Serve hot, garnished with spring onions."]
+      },
+      {
+        name: "Lumpiang Sariwa",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["For the Filling:", "1 cup jicama (singkamas), julienned", "1 cup green beans, julienned", "1 cup carrots, julienned", "1 cup cabbage, shredded", "1/2 cup shrimp, cooked and chopped", "1/2 cup cooked chicken, shredded", "1 onion, chopped", "3 cloves garlic, minced", "1 tbsp soy sauce", "Salt and pepper to taste", "For the Sauce:", "1/2 cup brown sugar", "1 tbsp cornstarch", "1 cup water", "1 tbsp soy sauce", "Garlic, minced", "Peanuts, crushed, for topping", "Lumpia wrappers (fresh, soft type)", "Lettuce leaves"],
+        steps: ["For the filling: In a pan, sauté garlic and onion. Add chicken and shrimp. Add all vegetables. Season with soy sauce, salt, and pepper. Cook until vegetables are tender-crisp. Set aside.", "For the sauce: In a saucepan, combine brown sugar, cornstarch, water, and soy sauce. Cook over medium heat, stirring constantly, until sauce thickens. Add minced garlic.", "To assemble: Lay a lettuce leaf on a lumpia wrapper. Spoon filling onto the lettuce. Fold the sides and roll tightly.", "Serve with the sauce and sprinkle with crushed peanuts."]
+      },
+      {
+        name: "Chicken Curry",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes",
+        ingredients: ["1 kg chicken pieces", "2-3 tbsp curry powder", "2 cups coconut milk (thick)", "1 cup coconut cream (optional)", "2 potatoes, cubed", "1 carrot, sliced", "1 red bell pepper, sliced", "1 onion, chopped", "4 cloves garlic, minced", "1 thumb-sized ginger, julienned", "2 tbsp cooking oil", "Fish sauce or salt to taste"],
+        steps: ["In a pot, heat oil and sauté ginger, garlic, and onion until fragrant.", "Add chicken and cook until lightly browned. Sprinkle curry powder over chicken and stir to coat.", "Pour in coconut milk and fish sauce. Bring to a simmer.", "Add potatoes and carrots. Cook until chicken is tender and vegetables are almost done.", "Add red bell pepper. If using, stir in coconut cream and simmer for a few more minutes until sauce thickens.", "Season with salt or more fish sauce. Serve hot with rice."]
+      },
+      {
+        name: "Beef Tapa",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes",
+        ingredients: ["500g beef sirloin or tenderloin, thinly sliced", "1/4 cup soy sauce", "2 tbsp vinegar", "2 tbsp brown sugar", "4 cloves garlic, minced", "1 tsp ground black pepper", "2 tbsp cooking oil"],
+        steps: ["In a bowl, combine beef slices, soy sauce, vinegar, brown sugar, minced garlic, and black pepper. Marinate for at least 1 hour, preferably overnight.", "Heat cooking oil in a pan over medium-high heat.", "Fry marinated beef in batches until browned and cooked through. Do not overcrowd the pan.", "Serve hot, traditionally with fried rice and fried egg (Tapsilog)."]
+      },
+      {
+        name: "Pork Tocino",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["500g pork shoulder or belly, thinly sliced", "1/4 cup brown sugar", "1 tbsp salt", "1 tbsp garlic powder", "1/2 tsp curing salt (optional, for traditional color/flavor)", "1/4 cup pineapple juice or water", "2 tbsp vinegar", "Cooking oil for frying"],
+        steps: ["In a bowl, combine pork slices with brown sugar, salt, garlic powder, and curing salt (if using). Mix well, massaging the marinade into the meat.", "Add pineapple juice/water and vinegar. Mix thoroughly.", "Transfer to an airtight container and refrigerate for at least 3 days for best results, or overnight for a quicker version.", "To cook: Place marinated tocino in a pan. Add a little water (about 1/4 cup) and simmer until water evaporates and pork is cooked.", "Add cooking oil and fry until tocino is caramelized and browned on both sides.", "Serve hot, traditionally with fried rice and fried egg (Tocilog)."]
+      },
+      {
+        name: "Longganisa",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["500g longganisa (Filipino sausage), prepared or store-bought", "1/4 cup water", "Cooking oil for frying"],
+        steps: ["Place longganisa in a pan. Add water and simmer over medium heat until water evaporates and longganisa is cooked through.", "Once water has evaporated, add a little cooking oil (if not enough fat rendered from sausage).", "Continue to fry longganisa until golden brown and slightly crispy, turning occasionally.", "Serve hot, traditionally with fried rice and fried egg (Longsilog)."]
+      },
+      {
+        name: "Daing na Bangus",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes",
+        ingredients: ["1 whole bangus (milkfish), butterflied and deboned", "1/2 cup vinegar", "4 cloves garlic, crushed", "1 tsp black peppercorns, crushed", "Salt to taste", "Cooking oil for frying"],
+        steps: ["Wash bangus and pat dry. In a shallow dish, combine vinegar, crushed garlic, peppercorns, and salt.", "Place the butterflied bangus in the marinade, ensuring it's well coated. Marinate for at least 30 minutes, or refrigerate for a few hours/overnight.", "Heat cooking oil in a pan over medium-high heat. ", "Fry marinated bangus until golden brown and crispy on both sides.", "Serve hot, traditionally with fried rice and fried egg (Bangsilog)."]
+      },
+      {
+        name: "Gambas (Filipino Style)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "10 minutes",
+        ingredients: ["500g medium shrimp, peeled and deveined, tails on", "1 head garlic, minced", "1/4 cup olive oil", "2-3 siling labuyo (bird's eye chilies), sliced (adjust to taste)", "1/4 cup tomato sauce or paste", "1 tbsp butter", "Salt and pepper to taste", "Chopped parsley or spring onions for garnish"],
+        steps: ["In a pan, heat olive oil over medium heat. Add minced garlic and chilies. Sauté until fragrant (do not brown garlic).", "Add shrimp and cook for 1-2 minutes until they start to turn pink.", "Stir in tomato sauce/paste. Cook for another 1-2 minutes.", "Add butter and stir until melted and combined with the sauce.", "Season with salt and pepper. Garnish with parsley or spring onions. Serve immediately with crusty bread or rice."]
+      },
+      {
+        name: "Kinilaw na Tanigue",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes (marinating time)",
+        ingredients: ["500g fresh tanigue (spanish mackerel) or tuna fillet, diced", "1 cup vinegar (preferably cane vinegar)", "1 red onion, thinly sliced", "1 thumb-sized ginger, julienned", "2-3 green chilies (siling labuyo), sliced", "1/4 cup calamansi juice", "Salt and black pepper to taste", "1/4 cup coconut cream (kakang gata, optional)"],
+        steps: ["Wash fish pieces thoroughly. Pat dry. In a non-reactive bowl, add the fish.", "Pour vinegar over the fish, ensuring all pieces are submerged. Let it 'cook' in the vinegar for 5-10 minutes (fish will turn opaque).", "Drain off most of the vinegar, leaving just a little for moisture.", "Add red onion, ginger, green chilies, calamansi juice, salt, and pepper. Toss gently to combine.", "If using, stir in coconut cream for a richer, creamier kinilaw.", "Serve immediately as an appetizer."]
+      },
+      {
+        name: "Sinangag (Garlic Fried Rice)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "10 minutes",
+        ingredients: ["4 cups leftover cooked rice (preferably day-old, cold rice)", "1 whole head garlic, minced", "3 tbsp cooking oil", "Salt to taste"],
+        steps: ["Heat oil in a large wok or pan over medium-high heat.", "Add minced garlic and fry until golden brown and crispy. Be careful not to burn.", "Remove half of the fried garlic for garnish. Keep remaining garlic and oil in the pan.", "Add cold rice to the pan. Break up any clumps with a spatula.", "Stir-fry the rice, tossing frequently, until heated through and slightly toasted.", "Season with salt to taste. Serve hot, garnished with the reserved fried garlic."]
+      },
+      {
+        name: "Pancit Bihon Guisado",
+        image: "",
+        boilingTime: "5 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["250g bihon (rice vermicelli) noodles", "200g chicken or pork, sliced thin", "100g shrimp, peeled and deveined (optional)", "1 cup mixed vegetables (cabbage, carrots, snow peas)", "1 onion, sliced", "3 cloves garlic, minced", "1/4 cup soy sauce", "1 cup chicken broth", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["Soak bihon noodles in warm water for 5-10 minutes until softened but still firm. Drain well.", "In a large pan or wok, heat oil. Sauté garlic and onion until fragrant.", "Add chicken/pork and cook until browned. Add shrimp if using, cook until pink.", "Add mixed vegetables and cook until slightly tender-crisp.", "Pour in soy sauce and chicken broth. Bring to a simmer.", "Add softened bihon noodles. Toss well until noodles absorb the liquid and flavors. Use tongs to mix.", "Season with salt and pepper. Serve hot, traditionally with calamansi."]
+      },
+      {
+        name: "Nilagang Baka",
+        image: "",
+        boilingTime: "2-3 hours",
+        cookingTime: "30 minutes",
+        ingredients: ["1 kg beef short ribs or brisket", "1 large onion, quartered", "2-3 potatoes, halved or quartered", "1/2 head cabbage, quartered", "2-3 pcs corn on the cob, cut into 2-inch pieces", "Long beans (sitaw), cut into 2-inch pieces", "Pechay or bok choy", "Salt and black peppercorns to taste", "Water for boiling"],
+        steps: ["In a large pot, place beef and cover with water. Bring to a boil, remove scum, then discard the first boil.", "Refill with fresh water, add onion and peppercorns. Bring to a boil, then lower heat and simmer for 2-3 hours or until beef is very tender.", "Add corn on the cob and potatoes. Cook until almost tender.", "Add long beans and cabbage. Cook for 5-7 minutes.", "Add pechay and cook for 1-2 minutes until wilted.", "Season with salt. Serve hot with fish sauce and calamansi on the side."]
+      },
+      {
+        name: "Escabeche (Sweet and Sour Fish)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["1 whole lapu-lapu (grouper) or any white fish, cleaned and scaled", "1/2 cup flour or cornstarch for dredging", "Oil for frying", "For the Sauce:", "1/2 cup vinegar", "1/2 cup brown sugar", "1/4 cup water", "1 bell pepper (red or green), julienned", "1 carrot, julienned", "1 onion, sliced", "1 thumb-sized ginger, julienned", "2 cloves garlic, minced", "Salt and pepper to taste"],
+        steps: ["Pat fish dry. Dredge fish in flour or cornstarch, shaking off excess.", "Heat oil in a large pan and fry fish until golden brown and crispy on both sides. Remove and set aside.", "In a separate pan, heat a little oil. Sauté garlic, ginger, and onion until fragrant.", "Add julienned carrots and bell pepper. Sauté for 2-3 minutes.", "Pour in vinegar, brown sugar, and water. Bring to a simmer, stirring until sugar dissolves.", "Cook until sauce slightly thickens. Season with salt and pepper.", "Pour the sweet and sour sauce over the fried fish. Serve immediately."]
+      },
+      {
+        name: "Pork Humba",
+        image: "",
+        boilingTime: "2 hours",
+        cookingTime: "40 minutes",
+        ingredients: ["1 kg pork belly, cut into large cubes", "1/2 cup soy sauce", "1/2 cup vinegar", "1/4 cup brown sugar", "1 head garlic, crushed", "1 tsp black peppercorns", "2 bay leaves", "1 star anise (optional)", "Dried shiitake mushrooms, rehydrated (optional)", "Banana blossoms (saba, optional)", "Salt to taste", "Water for simmering"],
+        steps: ["In a pot, combine pork belly, soy sauce, vinegar, brown sugar, crushed garlic, peppercorns, bay leaves, and star anise (if using). Add enough water to just cover the meat.", "Bring to a boil, then lower heat, cover, and simmer for 1.5-2 hours or until pork is very tender.", "Add rehydrated mushrooms and banana blossoms (if using). Continue to simmer until sauce thickens and pork is melt-in-your-mouth tender.", "Adjust seasoning with salt if needed. Serve hot with rice."]
+      },
+      {
+        name: "Afritada (Chicken or Pork)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes",
+        ingredients: ["1 kg chicken pieces or pork, cut into cubes", "1 large onion, chopped", "4 cloves garlic, minced", "1 bell pepper (red or green), sliced", "2 potatoes, cubed", "1 carrot, sliced", "1 can (8oz) tomato sauce", "1/2 cup green peas (canned or frozen)", "1/2 cup water or broth", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["In a pot, heat oil. Sauté garlic and onion until fragrant.", "Add chicken/pork and cook until lightly browned.", "Pour in tomato sauce and water/broth. Bring to a simmer.", "Add potatoes and carrots. Cook until meat is tender and vegetables are almost done.", "Add bell pepper and green peas. Cook for another 5-7 minutes until vegetables are tender-crisp and sauce has thickened.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Giniling (Ground Pork/Beef)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "25 minutes",
+        ingredients: ["500g ground pork or beef", "1 medium potato, diced", "1 carrot, diced", "1/2 cup green peas (canned or frozen)", "1 can (8oz) tomato sauce", "1 onion, chopped", "4 cloves garlic, minced", "1/4 cup water or broth", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pan, heat oil. Sauté garlic and onion until fragrant.", "Add ground pork/beef and cook until browned, breaking up clumps.", "Stir in tomato sauce and water/broth. Bring to a simmer.", "Add diced potatoes and carrots. Cook until vegetables are tender.", "Stir in green peas. Cook for another 3-5 minutes until heated through and sauce thickens.", "Season with salt and pepper. Serve hot with rice."]
+      },
+      {
+        name: "Pakbet with Lechon Kawali",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes",
+        ingredients: ["250g lechon kawali, chopped into pieces", "1 bitter gourd (ampalaya), sliced", "1 eggplant, sliced", "1 squash (kalabasa), cubed", "Okra, trimmed", "String beans (sitaw), cut into pieces", "1/4 cup bagoong isda (fermented fish paste)", "1 tomato, quartered", "1 onion, sliced", "3 cloves garlic, minced", "2 tbsp cooking oil", "1 cup water or rice washing"],
+        steps: ["In a pot, heat oil and sauté garlic, onion, and a portion of the lechon kawali until it renders a bit more fat and becomes aromatic.", "Add bagoong isda and sauté for a few minutes.", "Add water. Bring to a simmer.", "Add squash and cook until almost tender.", "Add eggplant, bitter gourd, okra, string beans, and tomato.", "Cook until vegetables are tender-crisp. Add the remaining lechon kawali pieces and gently mix.", "Serve hot."]
+      },
+      {
+        name: "Adobong Pusit",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["500g squid, cleaned (ink sac reserved)", "1/4 cup vinegar", "1/4 cup soy sauce", "1 head garlic, minced", "2 bay leaves", "1 tsp black peppercorns, crushed", "2-3 green chilies (siling haba, optional)", "2 tbsp cooking oil", "Salt to taste"],
+        steps: ["In a pan, heat oil. Sauté minced garlic until fragrant (do not brown).", "Add squid and cook for 1-2 minutes until it changes color.", "Pour in vinegar, soy sauce, bay leaves, and peppercorns. Add green chilies if using.", "Bring to a simmer. Do not stir for the first 3-5 minutes to allow the vinegar to cook off.", "Add squid ink (if desired, from reserved sacs) and stir gently to incorporate.", "Simmer until squid is tender and sauce slightly thickens (about 10-15 minutes). Avoid overcooking to prevent rubbery squid.", "Season with salt if needed. Serve hot."]
+      },
+      {
+        name: "Champorado",
+        image: "",
+        boilingTime: "15 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["1 cup glutinous rice (malagkit)", "1/2 cup unsweetened cocoa powder or tablea (chocolate tablets)", "6 cups water", "1/2 cup white sugar (adjust to taste)", "Milk (evaporated milk or condensed milk) for serving", "Tuyo (dried fish), fried (optional, for serving)"],
+        steps: ["Wash glutinous rice thoroughly. In a pot, combine rice and water. Bring to a boil, then lower heat and simmer, stirring occasionally, until rice is cooked and starts to thicken.", "In a separate bowl, dissolve cocoa powder/tablea in a little hot water to make a paste. Stir this into the rice mixture.", "Add sugar and continue to stir until dissolved and champorado thickens to a porridge consistency. Cook for about 15-20 minutes, stirring frequently to prevent sticking.", "Serve hot, with a drizzle of milk and fried tuyo on the side (if desired)."]
+      },
+      {
+        name: "Pochero",
+        image: "",
+        boilingTime: "2-3 hours",
+        cookingTime: "45 minutes",
+        ingredients: ["1 kg beef stew cuts (e.g., short ribs or brisket)", "2-3 pcs saba bananas (plantains), sliced diagonally", "2-3 sweet potatoes, cubed", "1/2 head cabbage, quartered", "1 bunch pechay or bok choy", "1 can (8oz) tomato sauce", "1 can (8oz) garbanzo beans (chickpeas)", "1 onion, chopped", "4 cloves garlic, minced", "Salt and pepper to taste", "Water for boiling"],
+        steps: ["In a large pot, boil beef until very tender (2-3 hours). Skim off impurities. Reserve broth.", "In a separate pan, heat a little oil. Sauté garlic and onion until fragrant. Add beef and brown lightly.", "Pour in tomato sauce and reserved beef broth. Bring to a simmer.", "Add saba bananas and sweet potatoes. Cook until almost tender.", "Add garbanzo beans, cabbage, and pechay. Cook until vegetables are tender-crisp.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Kalderetang Kambing",
+        image: "",
+        boilingTime: "2 hours",
+        cookingTime: "45 minutes",
+        ingredients: ["1 kg goat meat, cut into cubes", "1/2 cup tomato paste", "4 cups water or broth", "2 potatoes, cubed", "2 carrots, sliced", "1 red bell pepper, sliced", "1 green bell pepper, sliced", "1/4 cup liver spread", "1/2 cup cheese, grated", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "Salt and pepper to taste", "2 tbsp vinegar (for washing meat)"],
+        steps: ["Wash goat meat with vinegar and rinse thoroughly to remove gamey smell. Pat dry.", "In a large pot, boil goat meat until tender (about 2 hours or more). Set aside broth.", "In a separate pot, heat oil and sauté onion and garlic until fragrant.", "Add goat meat and cook until lightly browned. Stir in tomato paste.", "Pour in broth. Bring to a simmer, then add potatoes and carrots.", "Cook until vegetables are tender. Stir in liver spread and grated cheese until melted and sauce thickens.", "Add bell peppers and cook for another 5-7 minutes. Season with salt and pepper.", "Serve hot."]
+      },
+      {
+        name: "Lumpia Hubad",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["For the Filling:", "1 cup jicama (singkamas), julienned", "1 cup green beans, julienned", "1 cup carrots, julienned", "1 cup cabbage, shredded", "1/2 cup shrimp, cooked and chopped", "1/2 cup cooked chicken, shredded", "1 onion, chopped", "3 cloves garlic, minced", "1 tbsp soy sauce", "Salt and pepper to taste", "For the Sauce:", "1/2 cup brown sugar", "1 tbsp cornstarch", "1 cup water", "1 tbsp soy sauce", "Garlic, minced", "Peanuts, crushed, for topping"],
+        steps: ["For the filling: In a pan, sauté garlic and onion. Add chicken and shrimp. Add all vegetables. Season with soy sauce, salt, and pepper. Cook until vegetables are tender-crisp. Set aside.", "For the sauce: In a saucepan, combine brown sugar, cornstarch, water, and soy sauce. Cook over medium heat, stirring constantly, until sauce thickens. Add minced garlic.", "To serve: Place a generous amount of vegetable filling on a plate. Drizzle generously with the prepared sauce. Sprinkle with crushed peanuts.", "This is served 'naked' without a wrapper."]
+      },
+      {
+        name: "Pinatisang Manok",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["1 kg chicken, cut into pieces", "1/2 cup fish sauce (patis)", "1/4 cup vinegar (optional)", "1 head garlic, crushed", "1 onion, sliced", "1 thumb-sized ginger, julienned", "2-3 green chilies (siling haba, optional)", "2 cups water", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pot, heat oil. Sauté ginger, garlic, and onion until fragrant.", "Add chicken and cook until lightly browned.", "Pour in fish sauce and water. Bring to a boil. Add green chilies if using.", "Lower heat, cover, and simmer for 20-25 minutes or until chicken is tender. If using, add vinegar and simmer for another 5 minutes without stirring initially.", "Season with salt and pepper if needed. Serve hot with rice."]
+      },
+      {
+        name: "Ginisang Monggo",
+        image: "",
+        boilingTime: "45 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["1 cup dried mung beans (monggo)", "4-5 cups water", "200g pork belly or shrimp, sliced (optional)", "1 onion, chopped", "4 cloves garlic, minced", "1 tomato, diced", "1/2 cup bitter gourd (ampalaya) leaves or malunggay leaves", "2 tbsp cooking oil", "Fish sauce to taste", "Salt and pepper to taste"],
+        steps: ["Rinse mung beans thoroughly. In a pot, boil mung beans in water until very tender and broken down (about 45 minutes to 1 hour). Mash some of the beans for a thicker consistency.", "In a separate pan, heat oil. Sauté garlic, onion, and tomato until soft.", "Add pork belly or shrimp (if using) and cook until browned/pink.", "Add the cooked mung beans (with their liquid) to the sautéed mixture. Stir well.", "Bring to a simmer. Stir in bitter gourd or malunggay leaves and cook until wilted.", "Season with fish sauce, salt, and pepper. Serve hot."]
+      },
+      {
+        name: "Nilagang Pata",
+        image: "",
+        boilingTime: "2 hours",
+        cookingTime: "30 minutes",
+        ingredients: ["1 pork hock (pata), cleaned and sliced into serving pieces", "1 large onion, quartered", "2-3 potatoes, halved or quartered", "1/2 head cabbage, quartered", "Long beans (sitaw), cut into 2-inch pieces", "Pechay or bok choy", "Salt and black peppercorns to taste", "Water for boiling"],
+        steps: ["In a large pot, place pork hock and cover with water. Bring to a boil, remove scum, then discard the first boil.", "Refill with fresh water, add onion and peppercorns. Bring to a boil, then lower heat and simmer for 2-3 hours or until pork hock is very tender.", "Add potatoes and long beans. Cook until almost tender.", "Add cabbage and pechay. Cook for 5-7 minutes until tender-crisp.", "Season with salt. Serve hot with fish sauce and calamansi on the side."]
+      },
+      {
+        name: "Fried Chicken (Pinoy Style)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["1 kg chicken pieces (drumsticks, thighs)", "1/4 cup soy sauce", "1/4 cup calamansi juice (or lemon juice)", "1 tbsp garlic powder", "1 tsp black pepper", "1 cup all-purpose flour", "1/2 cup cornstarch", "1 tsp baking powder", "Salt to taste", "Oil for deep frying"],
+        steps: ["In a bowl, marinate chicken pieces in soy sauce, calamansi juice, garlic powder, and black pepper for at least 30 minutes (or overnight).", "In another bowl, combine flour, cornstarch, baking powder, and salt. Mix well.", "Dredge each marinated chicken piece in the flour mixture, ensuring it's fully coated. Press the coating onto the chicken.", "Heat oil in a deep pot or fryer to 350°F (175°C).", "Carefully place chicken pieces in the hot oil (do not overcrowd). Fry for 8-10 minutes per side, or until golden brown, crispy, and cooked through. Adjust heat to maintain even frying.", "Remove chicken and drain on a wire rack lined with paper towels. Serve hot."]
+      },
+      {
+        name: "Sopas (Macaroni Soup)",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "25 minutes",
+        ingredients: ["1 cup elbow macaroni", "200g chicken breast, shredded (boiled)", "1/2 cup sliced hotdogs or ham", "1 small onion, chopped", "3 cloves garlic, minced", "1 cup evaporated milk", "4 cups chicken broth", "1 carrot, diced", "1/2 cup shredded cabbage", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["Cook macaroni according to package directions. Drain and set aside.", "In a pot, heat oil. Sauté garlic and onion until fragrant.", "Add shredded chicken and hotdogs/ham. Sauté for a few minutes.", "Pour in chicken broth and bring to a simmer. Add diced carrots and cook until tender-crisp.", "Add cooked macaroni and shredded cabbage. Stir in evaporated milk and bring to a gentle simmer (do not boil rapidly).", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Crispy Fried Tilapia",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes",
+        ingredients: ["1-2 whole tilapia, cleaned and scaled", "Salt and pepper to taste", "1/4 cup cornstarch or all-purpose flour", "Oil for frying"],
+        steps: ["Pat tilapia very dry with paper towels. Score the sides of the fish a few times.", "Season fish generously inside and out with salt and pepper.", "Lightly dredge fish in cornstarch or flour, shaking off excess.", "Heat a generous amount of oil in a pan over medium-high heat. Ensure oil is hot enough (a drop of water should sizzle).", "Carefully place fish in the hot oil. Fry for about 5-7 minutes per side, or until golden brown and crispy.", "Remove fish and drain on paper towels. Serve hot with a dipping sauce (e.g., soy sauce with calamansi and chilies, or spiced vinegar)."]
+      },
+      {
+        name: "Sinigang na Hipon",
+        image: "",
+        boilingTime: "5 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["500g large shrimp, peeled and deveined (tails on)", "1 pack sinigang mix (tamarind soup base)", "1 onion, quartered", "2 tomatoes, quartered", "1 radish (labanos), sliced", "1 eggplant, sliced", "Long beans (sitaw), cut into 2-inch pieces", "Kangkong (water spinach)", "4-5 cups water", "Fish sauce to taste"],
+        steps: ["In a pot, combine water, onion, and tomatoes. Bring to a boil and simmer for 5 minutes.", "Add sinigang mix and radish. Cook for 3-5 minutes.", "Add eggplant and long beans. Cook until vegetables are almost tender.", "Add shrimp and kangkong leaves. Cook for 2-3 minutes until shrimp are pink and kangkong is wilted (do not overcook shrimp).", "Season with fish sauce to taste. Serve hot."]
+      },
+      {
+        name: "Pork and Beans (Filipino Style)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["1 can (15oz) pork and beans (canned)", "200g ground pork", "1 onion, chopped", "3 cloves garlic, minced", "1 bell pepper (red or green), diced", "1/4 cup tomato sauce (optional, for richer flavor)", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["In a pan, heat oil. Sauté garlic and onion until fragrant.", "Add ground pork and cook until browned, breaking up clumps.", "Add diced bell pepper and sauté for 2-3 minutes.", "Pour in canned pork and beans. Add tomato sauce if using. Stir gently.", "Bring to a simmer and cook for 5-7 minutes, stirring occasionally, until heated through and flavors meld.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Ginataang Tilapia",
+        image: "",
+        boilingTime: "5 minutes",
+        cookingTime: "25 minutes",
+        ingredients: ["1-2 whole tilapia, cleaned and scored", "2 cups coconut milk", "1 thumb-sized ginger, julienned", "1 onion, chopped", "3 cloves garlic, minced", "2-3 green chilies (siling haba, optional)", "1 tbsp fish sauce", "2 tbsp cooking oil", "Salt and pepper to taste", "Optional: sliced eggplant or bitter gourd"],
+        steps: ["In a pot, heat oil and sauté ginger, garlic, and onion until fragrant.", "Add fish sauce and pour in coconut milk. Bring to a gentle simmer.", "Carefully place tilapia in the simmering sauce. Add green chilies and any optional vegetables like eggplant or bitter gourd.", "Simmer, uncovered, for 15-20 minutes, or until fish is cooked through and sauce has thickened slightly. Avoid stirring vigorously to prevent breaking the fish.", "Season with salt and pepper. Serve hot with rice."]
+      },
+      {
+        name: "Pork Embutido (Meatloaf)",
+        image: "",
+        boilingTime: "1 hour (steaming)",
+        cookingTime: "N/A",
+        ingredients: ["500g ground pork", "1/2 cup breadcrumbs", "1/4 cup minced carrots", "1/4 cup minced red bell pepper", "1/4 cup minced pickles or relish", "2 eggs, beaten", "1/4 cup sweet ham or hotdogs, diced", "1/4 cup cheese, grated", "Salt and pepper to taste", "Hard-boiled eggs, sliced (for filling)", "Sweet ham, sliced (for filling)", "Aluminum foil for wrapping"],
+        steps: ["In a large bowl, combine ground pork, breadcrumbs, carrots, red bell pepper, pickles, beaten eggs, diced ham/hotdogs, grated cheese, salt, and pepper. Mix thoroughly until well combined.", "Lay out a piece of aluminum foil. Spread a portion of the meat mixture into a rectangular shape.", "Arrange slices of hard-boiled eggs and ham in the center of the meat mixture.", "Carefully roll the meat mixture tightly with the foil, forming a log. Seal the ends by twisting the foil.", "Steam the embutido rolls for 1 hour, or until cooked through.", "Let cool slightly before slicing. Can be fried lightly after steaming for a crispier exterior."]
+      },
+      {
+        name: "Bopis",
+        image: "",
+        boilingTime: "1 hour",
+        cookingTime: "30 minutes",
+        ingredients: ["500g pork lungs and heart, cleaned and boiled until tender", "1/4 cup vinegar", "1/4 cup soy sauce", "1 can (8oz) tomato sauce", "1 red bell pepper, diced", "1 green bell pepper, diced", "1 onion, chopped", "4 cloves garlic, minced", "2-3 siling labuyo (bird's eye chilies), chopped (optional)", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["Boil pork lungs and heart until very tender. Drain and chop finely. Set aside.", "In a pan, heat oil. Sauté garlic and onion until fragrant.", "Add chopped pork lungs and heart. Sauté for a few minutes.", "Pour in vinegar. Let it boil without stirring for 2-3 minutes.", "Add soy sauce and tomato sauce. Bring to a simmer.", "Add bell peppers and chilies (if using). Cook for 10-15 minutes until sauce thickens.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Chicken Inasal",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["4-6 pcs chicken leg quarters or thighs", "For Marinade:", "1/2 cup vinegar", "1/4 cup calamansi juice", "1/4 cup soy sauce", "1/4 cup brown sugar", "1 head garlic, minced", "1 thumb-sized ginger, grated", "2-3 stalks lemongrass, pounded and sliced", "1 tsp black pepper", "Annatto oil (atsuete oil) for basting"],
+        steps: ["In a large bowl, combine all marinade ingredients. Add chicken pieces and mix well, ensuring chicken is fully coated. Marinate for at least 2 hours, preferably overnight.", "Prepare grill or preheat oven to 375°F (190°C).", "Grill or bake chicken, basting frequently with annatto oil and leftover marinade, until cooked through, golden brown, and slightly charred (if grilling).", "Serve hot with rice and a dipping sauce of soy sauce, calamansi, and chili."]
+      },
+      {
+        name: "Adobong Kangkong",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "10 minutes",
+        ingredients: ["1 bunch kangkong (water spinach), trimmed and cut", "1/4 cup soy sauce", "1/4 cup vinegar", "3 cloves garlic, minced", "1 small onion, sliced", "1/2 cup water", "1 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pan, heat oil. Sauté garlic and onion until fragrant.", "Add kangkong stalks first, sauté for 1-2 minutes.", "Add kangkong leaves, soy sauce, vinegar, and water. Bring to a simmer.", "Cook for 3-5 minutes until kangkong is tender-crisp. Avoid overcooking.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Ginisa (Sautéed Vegetables)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes",
+        ingredients: ["2 cups mixed vegetables (e.g., green beans, carrots, cabbage)", "100g ground pork or shrimp (optional)", "1 onion, chopped", "3 cloves garlic, minced", "1 tomato, diced", "1 tbsp fish sauce", "1/2 cup water or broth", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pan, heat oil. Sauté garlic, onion, and tomato until soft.", "Add ground pork or shrimp (if using) and cook until browned/pink.", "Add hardier vegetables (like carrots and green beans). Sauté for a few minutes.", "Add remaining vegetables (like cabbage). Pour in water/broth and fish sauce. Bring to a simmer.", "Cook until vegetables are tender-crisp. Season with salt and pepper.", "Serve hot."]
+      },
+      {
+        name: "Tinola (Pork)",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g pork cuts (e.g., spare ribs or bony parts)", "1 thumb ginger, sliced", "2 cups green papaya, sliced", "1 onion", "Malunggay or chili leaves", "Fish sauce", "Water"],
+        steps: ["Sauté ginger, onion, and pork until lightly browned.", "Add fish sauce and water, bring to a boil.", "Boil for 10 minutes, then lower heat and simmer until pork is tender.", "Add green papaya and cook until tender.", "Add malunggay leaves and serve hot."]
+      },
+      {
+        name: "Kansi (Ilonggo Bulalo)",
+        image: "",
+        boilingTime: "3-4 hours",
+        cookingTime: "40 minutes",
+        ingredients: ["1.5 kg beef shanks with bone marrow", "2 pcs saba bananas (plantains), sliced", "1 small unripe jackfruit (langka), sliced", "1/4 cup batuan (sour fruit, or use tamarind paste)", "1 stalk lemongrass, pounded", "1 large onion, quartered", "Green chilies (siling labuyo), optional", "Salt and pepper to taste", "Water for boiling"],
+        steps: ["In a large pot, place beef shanks and cover with water. Bring to a boil, then remove scum.", "Refill with fresh water, add onion and lemongrass, and batuan/tamarind. Bring to a boil, then lower heat and simmer for 3-4 hours or until beef is very tender and marrow is soft.", "Add saba bananas and jackfruit. Cook until tender.", "Add green chilies if desired. Season with salt and pepper.", "Serve hot."]
+      },
+      {
+        name: "Tuna Kinilaw",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes (marinating time)",
+        ingredients: ["500g fresh tuna fillet, diced", "1 cup vinegar (preferably cane vinegar)", "1 red onion, thinly sliced", "1 thumb-sized ginger, julienned", "2-3 green chilies (siling labuyo), sliced", "1/4 cup calamansi juice", "Salt and black pepper to taste", "1/4 cup coconut cream (kakang gata, optional)"],
+        steps: ["Wash tuna pieces thoroughly. Pat dry. In a non-reactive bowl, add the tuna.", "Pour vinegar over the tuna, ensuring all pieces are submerged. Let it 'cook' in the vinegar for 5-10 minutes (fish will turn opaque).", "Drain off most of the vinegar, leaving just a little for moisture.", "Add red onion, ginger, green chilies, calamansi juice, salt, and pepper. Toss gently to combine.", "If using, stir in coconut cream for a richer, creamier kinilaw.", "Serve immediately as an appetizer."]
+      },
+      {
+        name: "Bistik Tagalog (Chicken)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["500g chicken breast or thighs, thinly sliced", "1/2 cup soy sauce", "1/4 cup calamansi juice (or lemon juice)", "2 large onions, sliced into rings", "2 tbsp cooking oil", "Salt and black pepper to taste"],
+        steps: ["Marinate chicken slices in soy sauce and calamansi juice for at least 30 minutes.", "Heat oil in a pan. Fry half of the onion rings until lightly browned. Remove and set aside for garnish.", "In the same pan, brown chicken slices in batches. Remove chicken and set aside.", "Pour the chicken marinade into the pan. Bring to a simmer and let it reduce slightly.", "Return the chicken to the pan and cook for 1-2 minutes, coating with the sauce. Ensure chicken is cooked through.", "Season with salt and pepper. Arrange chicken on a plate and top with the reserved fried onion rings.", "Serve hot with rice."]
+      },
+      {
+        name: "Tortang Talong (Eggplant Omelette)",
+        image: "",
+        boilingTime: "15 minutes",
+        cookingTime: "10 minutes",
+        ingredients: ["2-3 large eggplants", "2 eggs, beaten", "1/4 cup ground pork (optional)", "1 small onion, minced", "2 cloves garlic, minced", "Salt and pepper to taste", "Cooking oil for frying"],
+        steps: ["Roast or grill eggplants until skin is charred and flesh is soft. Peel off the skin carefully, leaving the stem intact. Flatten the eggplant gently with a fork.", "If using ground pork: In a pan, sauté garlic and onion. Add ground pork and cook until browned. Season with salt and pepper. Set aside.", "In a bowl, beat eggs. Season with salt and pepper.", "Dip each flattened eggplant in the beaten egg, coating completely. If using, place some cooked ground pork on one side of the eggplant.", "Heat cooking oil in a pan. Fry the eggplant until golden brown on both sides and egg is set. If using pork, fry pork-side down first.", "Serve hot with ketchup or banana ketchup."]
+      },
+      {
+        name: "Pancit Malabon",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g thick rice noodles (pancit Malabon noodles)", "For the Sauce:", "1/2 cup ground pork", "1/4 cup tinapa (smoked fish) flakes", "1/2 cup shrimp, peeled and chopped", "2 tbsp cooking oil", "1 onion, chopped", "4 cloves garlic, minced", "1 cup shrimp broth or water", "2 tbsp annatto powder dissolved in 1/4 cup water", "1/4 cup cornstarch slurry", "Fish sauce to taste", "Salt and pepper", "Garnish:", "Cooked shrimp, hard-boiled eggs (sliced), chicharon (pork cracklings, crushed), spring onions, fried garlic, calamansi"],
+        steps: ["Cook pancit Malabon noodles according to package directions. Drain and set aside.", "For the sauce: In a pan, heat oil and sauté garlic and onion until fragrant.", "Add ground pork and cooked until browned. Add shrimp and cook until pink. Add tinapa flakes and cook for a few minutes.", "Pour in shrimp broth/water and annatto water. Bring to a simmer.", "Slowly pour in cornstarch slurry, stirring constantly until sauce thickens. Season with fish sauce, salt, and pepper.", "To serve: Place cooked noodles on a platter, generously spoon sauce over them. Garnish with cooked shrimp, sliced eggs, chicharon, spring onions, fried garlic, and a squeeze of calamansi."]
+      },
+      {
+        name: "Adobong Sitaw (String Beans)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["500g string beans (sitaw), cut into 2-inch pieces", "200g pork belly, sliced (optional)", "1/4 cup soy sauce", "1/4 cup vinegar", "3 cloves garlic, crushed", "1 tsp black peppercorns", "1/2 cup water", "1 tbsp cooking oil", "Salt to taste"],
+        steps: ["In a pan, heat oil. Sauté garlic and pork belly (if using) until lightly browned.", "Add string beans and sauté for 2-3 minutes.", "Pour in soy sauce, vinegar, black peppercorns, and water. Bring to a simmer.", "Cover and cook for 10-15 minutes, or until string beans are tender-crisp and sauce has reduced.", "Season with salt. Serve hot."]
+      },
+      {
+        name: "Leche Flan",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "45 minutes (steaming)",
+        ingredients: ["10 egg yolks", "1 can (14oz) condensed milk", "1 can (12oz) evaporated milk", "1 tsp vanilla extract", "For Caramel:", "1 cup granulated sugar", "1/4 cup water"],
+        steps: ["For caramel: In a llanera (oval-shaped pan) or ramekins, combine sugar and water. Cook over low heat until sugar dissolves and turns into an amber-colored caramel. Swirl to coat the bottom evenly. Set aside to cool and harden.", "For flan: In a large bowl, whisk egg yolks gently (do not create too many bubbles). Add condensed milk, evaporated milk, and vanilla extract. Mix well until just combined. Strain the mixture through a fine-mesh sieve to remove any lumps or egg membranes.", "Pour the strained mixture carefully into the llanera/ramekins over the hardened caramel.", "Cover the llanera/ramekins tightly with aluminum foil.", "Steam over simmering water for 45 minutes to 1 hour, or until firm (a toothpick inserted should come out clean).", "Let cool completely, then refrigerate for at least 4 hours or overnight.", "To serve, run a knife around the edges, invert onto a serving plate, allowing the caramel to drizzle over."]
+      },
+      {
+        name: "Halo-Halo",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes (assembly)",
+        ingredients: ["Shaved ice", "Sweetened red beans", "Sweetened garbanzo beans", "Macapuno (sweetened coconut sport)", "Kaong (sugar palm fruit)", "Nata de coco (coconut gel)", "Sweetened saba bananas", "Ube halaya (purple yam jam)", "Leche flan, sliced", "Pinipig (toasted glutinous rice flakes)", "Evaporated milk", "Ice cream (ube or vanilla, optional)"],
+        steps: ["In a tall glass or bowl, layer 1-2 tablespoons of each sweet ingredient (red beans, garbanzo, macapuno, kaong, nata de coco, saba bananas, ube halaya).", "Fill the glass with shaved ice, mounding it on top.", "Place a slice of leche flan on top of the shaved ice.", "Drizzle generously with evaporated milk.", "If desired, add a scoop of ice cream on top.", "Sprinkle with pinipig.", "Serve immediately with a long spoon for mixing."]
+      },
+      {
+        name: "Turon (Banana Lumpia)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "15 minutes",
+        ingredients: ["4-5 saba bananas (plantains), peeled and sliced lengthwise", "1/2 cup brown sugar", "15-20 lumpia wrappers (spring roll wrappers)", "Oil for frying", "Optional: jackfruit strips"],
+        steps: ["Peel saba bananas and slice them in half or quarters lengthwise.", "Roll each banana slice in brown sugar, ensuring it's coated.", "Place a sugared banana slice (and a few strips of jackfruit, if using) near one end of a lumpia wrapper.", "Fold the sides in, then roll tightly from the bottom up. Seal the edge with a little water.", "Heat oil in a deep pan over medium heat. Fry turon in batches until golden brown and crispy, turning occasionally.", "For extra caramelization, you can add a little more brown sugar to the oil while frying, stirring constantly until dissolved and coats the turon.", "Drain on paper towels. Serve hot."]
+      },
+      {
+        name: "Ginataang Kuhol (Snails in Coconut Milk)",
+        image: "",
+        boilingTime: "10 minutes (for snails)",
+        cookingTime: "30 minutes",
+        ingredients: ["500g kuhol (snails), cleaned and tips removed", "3 cups coconut milk", "1 thumb-sized ginger, julienned", "1 onion, chopped", "3 cloves garlic, minced", "2-3 green chilies (siling haba, optional)", "Malunggay leaves or chili leaves (sili leaves)", "1 tbsp fish sauce", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["Clean snails thoroughly by soaking in water with a few coins for a few hours to purge dirt. Cut off the pointed tips. Boil snails in water for 5-10 minutes. Drain and rinse.", "In a pot, heat oil and sauté ginger, garlic, and onion until fragrant.", "Add snails and sauté for 2-3 minutes.", "Pour in coconut milk and fish sauce. Add green chilies if using. Bring to a gentle simmer.", "Cook over low heat for 15-20 minutes, stirring occasionally, until snails are cooked through and sauce thickens.", "Add malunggay or chili leaves and cook until wilted. Season with salt and pepper.", "Serve hot."]
+      },
+      {
+        name: "Dinakdakan",
+        image: "",
+        boilingTime: "30 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["500g pork mask (face) and/or ears", "1/2 cup pig's brain (or mayonnaise as substitute)", "1 red onion, chopped", "2-3 green chilies (siling labuyo), chopped", "1 thumb-sized ginger, grated", "1/4 cup vinegar", "1/4 cup calamansi juice", "Salt and pepper to taste", "Grilling/broiling"],
+        steps: ["Boil pork mask/ears until tender (about 30 minutes to 1 hour depending on tenderness). Drain well.", "Grill or broil the boiled pork until crispy and slightly charred. Chop into small pieces.", "If using pig's brain: Boil pig's brain for 5 minutes. Mash with a fork.", "In a bowl, combine chopped pork, red onion, green chilies, grated ginger, vinegar, and calamansi juice. Mix well.", "Add mashed pig's brain (or mayonnaise). Mix thoroughly until ingredients are coated and creamy.", "Season with salt and pepper. Serve immediately."]
+      },
+      {
+        name: "Balbacua",
+        image: "",
+        boilingTime: "4-5 hours",
+        cookingTime: "1 hour",
+        ingredients: ["1 kg beef skin/tendon, cut into cubes", "1/2 kg beef tripe, cleaned and cut into pieces", "1 oxtail, cut into sections (optional)", "1 can (8oz) tomato sauce", "1 can (8oz) garbanzo beans (chickpeas)", "1 large onion, chopped", "6 cloves garlic, minced", "1 thumb-sized ginger, julienned", "1/4 cup peanut butter (optional, for thickening)", "Annatto powder (atsuete), dissolved in water (for color)", "Salt and pepper to taste", "Water for boiling"],
+        steps: ["In a large pot, boil beef skin, tendon, and tripe until very tender (4-5 hours or use pressure cooker). Skim impurities. Reserve broth.", "In a separate pot, heat a little oil. Sauté garlic, onion, and ginger until fragrant.", "Add the boiled beef parts. Sauté for a few minutes.", "Pour in tomato sauce and enough reserved broth to cover. Bring to a simmer.", "Add garbanzo beans and annatto water. Stir in peanut butter if using, until dissolved.", "Continue to simmer for 30-45 minutes, or until sauce thickens and flavors meld. Adjust consistency by adding more broth if needed.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Lengua Estofado",
+        image: "",
+        boilingTime: "2-3 hours",
+        cookingTime: "45 minutes",
+        ingredients: ["1 whole ox tongue", "1 can (8oz) tomato sauce", "1/2 cup soy sauce", "1/4 cup vinegar", "1/4 cup green olives, sliced", "1 red bell pepper, sliced", "2 potatoes, cubed", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "Salt and pepper to taste", "Water for boiling"],
+        steps: ["Boil ox tongue in water for 2-3 hours until tender. Remove skin and slice into thick pieces. Set aside broth.", "In a pot, heat oil. Sauté garlic and onion until fragrant.", "Add sliced ox tongue and brown lightly.", "Pour in tomato sauce, soy sauce, and vinegar. Bring to a simmer.", "Add enough reserved broth to cover. Add potatoes and cook until tender.", "Add bell pepper and green olives. Cook for another 10-15 minutes until sauce thickens.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Pinangat (Taro Leaves with Fish/Shrimp)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "1 hour",
+        ingredients: ["Fresh taro leaves (gabi leaves)", "1 cup gabi (taro) meat, grated", "1/2 cup shrimp, chopped", "1/4 cup pork belly, diced (optional)", "1/4 cup ginger, grated", "1 onion, minced", "2-3 green chilies (siling haba), whole", "4 cups coconut milk (first and second extraction)", "1/2 cup coconut cream (kakang gata)", "1/4 cup bagoong alamang (shrimp paste)", "Salt to taste"],
+        steps: ["Prepare taro leaves by washing and trimming. Layer a few leaves flat.", "In a bowl, combine grated taro meat, chopped shrimp, diced pork (if using), grated ginger, minced onion, and bagoong alamang. Mix well.", "Spoon a portion of the mixture onto the taro leaves. Fold the leaves to form a pouch or packet. Secure with string if necessary.", "In a wide pot, arrange the wrapped pinangat. Pour in coconut milk (first extraction) and add whole green chilies.", "Bring to a gentle boil, then lower heat and simmer for 45 minutes to 1 hour, or until taro leaves are tender and most of the liquid has been absorbed.", "Pour in coconut cream and continue to simmer gently until sauce thickens. Season with salt.", "Serve hot with rice."]
+      },
+      {
+        name: "Bibingka",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes (baking)",
+        ingredients: ["2 cups rice flour", "1/2 cup glutinous rice flour", "1/2 cup sugar", "1 tbsp baking powder", "1 1/2 cups coconut milk", "1/2 cup evaporated milk", "2 eggs", "Salted duck eggs, sliced", "Cheese, grated", "Melted butter or margarine", "Banana leaves for lining"],
+        steps: ["Line a round baking pan (traditionally a clay pot) with banana leaves, brushed with a little oil.", "In a bowl, combine rice flour, glutinous rice flour, sugar, and baking powder. Mix well.", "In another bowl, whisk coconut milk, evaporated milk, and eggs. Gradually add the wet ingredients to the dry ingredients, mixing until smooth batter is formed.", "Pour the batter into the prepared baking pan.", "Arrange sliced salted duck eggs and grated cheese on top.", "Bake in a preheated oven (or traditional bibingka oven with charcoal on top and bottom) at 350°F (175°C) for 30-40 minutes, or until golden brown and a toothpick inserted comes out clean.", "Brush with melted butter or margarine immediately after baking. Serve hot, optionally with grated coconut."]
+      },
+      {
+        name: "Puto (Steamed Rice Cakes)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes (steaming)",
+        ingredients: ["2 cups all-purpose flour", "1 cup sugar", "1 tbsp baking powder", "1 1/2 cups water", "1 can (5oz) evaporated milk", "1 egg white (optional, for softer texture)", "Cheese, grated (optional, for topping)"],
+        steps: ["In a bowl, combine flour, sugar, and baking powder. Mix well.", "In a separate bowl, whisk water, evaporated milk, and egg white (if using).", "Gradually add the wet ingredients to the dry ingredients, mixing until smooth batter is formed.", "Grease puto molds or small ramekins. Pour batter into molds, filling about 3/4 full.", "Arrange grated cheese on top of each mold (if using).", "Steam over boiling water for 15-20 minutes, or until puto are firm and cooked through. Ensure steam is vigorous and lid is wrapped in cloth to prevent water drips.", "Let cool slightly before unmolding. Serve warm."]
+      },
+      {
+        name: "Kutsinta",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "25 minutes (steaming)",
+        ingredients: ["1 cup all-purpose flour", "1/2 cup tapioca flour or cornstarch", "1 cup brown sugar", "2 cups water", "1 tbsp lye water (lihia, food-grade)", "Annatto powder, dissolved in a little water (for color)", "Grated coconut for serving"],
+        steps: ["In a bowl, combine all-purpose flour, tapioca flour/cornstarch, and brown sugar. Mix well.", "Gradually add water, stirring until smooth and lump-free.", "Stir in lye water and annatto water (for desired color). Mix well.", "Grease kutsinta molds or small ramekins. Pour the batter into the molds.", "Steam over boiling water for 20-25 minutes, or until kutsinta are translucent and firm. Ensure steam is vigorous and lid is wrapped in cloth.", "Let cool completely before unmolding. Serve with grated coconut."]
+      },
+      {
+        name: "Pancit Lomi (Batangas Style)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["500g fresh lomi noodles (thick egg noodles)", "200g pork belly, sliced", "100g pork liver, sliced", "50g kikiam or fishball, sliced", "1 egg, beaten", "5 cups rich pork broth", "1/4 cup cornstarch slurry (2 tbsp cornstarch dissolved in 1/4 cup water)", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "Soy sauce, fish sauce, salt, pepper to taste", "Chopped spring onions for garnish", "Calamansi, chili-garlic oil for serving"],
+        steps: ["In a pot, heat oil and sauté garlic and onion until fragrant.", "Add pork belly and cook until lightly browned. Add pork liver, kikiam/fishball. Sauté for a few minutes.", "Pour in pork broth. Bring to a boil.", "Add lomi noodles and cook until almost tender.", "Slowly pour in cornstarch slurry, stirring constantly until the soup thickens to desired consistency.", "Slowly drizzle in beaten egg while stirring gently to create egg strands.", "Season with soy sauce, fish sauce, salt, and pepper. Serve hot, garnished with spring onions, and serve with calamansi and chili-garlic oil on the side."]
+      },
+      {
+        name: "Kilawin Puso ng Saging (Banana Blossom Salad)",
+        image: "",
+        boilingTime: "20 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["1 large banana blossom (puso ng saging), outer leaves removed", "1/2 cup vinegar", "1 red onion, thinly sliced", "1 thumb-sized ginger, julienned", "2-3 green chilies (siling labuyo), sliced", "1/4 cup calamansi juice", "1/4 cup shredded smoked fish (tinapa) flakes (optional)", "Salt and pepper to taste", "1/4 cup coconut cream (kakang gata, optional)"],
+        steps: ["Remove outer dark leaves of banana blossom. Slice thinly. Soak immediately in water with a little salt or vinegar to prevent browning and remove sap. Squeeze out excess water.", "Boil sliced banana blossom in water with a pinch of salt for 15-20 minutes until tender. Drain well and squeeze out excess water.", "In a bowl, combine boiled banana blossom, red onion, ginger, green chilies, vinegar, calamansi juice, and tinapa flakes (if using). Mix well.", "If using, stir in coconut cream. Season with salt and pepper to taste. Serve chilled."]
+      },
+      {
+        name: "Ginataang Alimango (Crabs in Coconut Milk)",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "25 minutes",
+        ingredients: ["1 kg crabs, cleaned and cut into pieces", "3 cups coconut milk (thick)", "1 thumb-sized ginger, julienned", "1 onion, chopped", "3 cloves garlic, minced", "2-3 green chilies (siling haba, optional)", "Kangkong or malunggay leaves (optional)", "1 tbsp fish sauce", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a large pot, heat oil and sauté ginger, garlic, and onion until fragrant.", "Add crabs and sauté for 2-3 minutes until they start to turn orange.", "Pour in coconut milk and fish sauce. Add green chilies if using. Bring to a gentle simmer.", "Cover and cook for 15-20 minutes, or until crabs are cooked through and sauce has thickened.", "If using, add kangkong or malunggay leaves and cook until wilted. Season with salt and pepper.", "Serve hot."]
+      },
+      {
+        name: "Sinigang na Bangus",
+        image: "",
+        boilingTime: "5 minutes",
+        cookingTime: "20 minutes",
+        ingredients: ["1 whole bangus (milkfish), sliced into serving pieces", "1 pack sinigang mix (tamarind soup base)", "1 onion, quartered", "2 tomatoes, quartered", "1 radish (labanos), sliced", "1 eggplant, sliced", "Long beans (sitaw), cut into 2-inch pieces", "Kangkong (water spinach)", "4-5 cups water", "Fish sauce to taste"],
+        steps: ["In a pot, combine water, onion, and tomatoes. Bring to a boil and simmer for 5 minutes.", "Add sinigang mix and radish. Cook for 3-5 minutes.", "Add eggplant and long beans. Cook until vegetables are almost tender.", "Add bangus slices and kangkong leaves. Cook for 5-7 minutes until fish is cooked through and kangkong is wilted.", "Season with fish sauce to taste. Serve hot."]
+      },
+      {
+        name: "Pinatisang Baboy",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g pork belly or pork shoulder, cut into cubes", "1/2 cup fish sauce (patis)", "1/4 cup vinegar (optional)", "1 head garlic, crushed", "1 onion, sliced", "1 thumb-sized ginger, julienned", "2-3 green chilies (siling haba, optional)", "2 cups water", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pot, heat oil. Sauté ginger, garlic, and onion until fragrant.", "Add pork and cook until lightly browned.", "Pour in fish sauce and water. Bring to a boil. Add green chilies if using.", "Lower heat, cover, and simmer for 20-25 minutes or until pork is tender. If using, add vinegar and simmer for another 5 minutes without stirring initially.", "Season with salt and pepper if needed. Serve hot with rice."]
+      },
+      {
+        name: "Adobong Labong (Bamboo Shoots)",
+        image: "",
+        boilingTime: "15 minutes (for labong)",
+        cookingTime: "20 minutes",
+        ingredients: ["500g fresh or canned bamboo shoots (labong), sliced or shredded", "200g pork belly, sliced (optional)", "1/4 cup soy sauce", "1/4 cup vinegar", "3 cloves garlic, crushed", "1 tsp black peppercorns", "1/2 cup water", "1 tbsp cooking oil", "Salt to taste"],
+        steps: ["If using fresh bamboo shoots, boil them in water for 10-15 minutes, changing water once or twice to remove bitterness. Drain well.", "In a pan, heat oil. Sauté garlic and pork belly (if using) until lightly browned.", "Add bamboo shoots and sauté for 2-3 minutes.", "Pour in soy sauce, vinegar, black peppercorns, and water. Bring to a simmer.", "Cover and cook for 10-15 minutes, or until bamboo shoots are tender and sauce has reduced.", "Season with salt. Serve hot."]
+      },
+      {
+        name: "Ensaladang Talong (Eggplant Salad)",
+        image: "",
+        boilingTime: "15 minutes (roasting)",
+        cookingTime: "10 minutes (assembly)",
+        ingredients: ["2-3 large eggplants", "1 red onion, thinly sliced", "1 tomato, diced", "1/4 cup vinegar (preferably cane vinegar)", "1 tbsp fish sauce", "Salt and pepper to taste", "Optional: chopped siling labuyo (bird's eye chili), chopped spring onions"],
+        steps: ["Roast or grill eggplants until skin is charred and flesh is soft. Let cool, then peel off the skin. Roughly chop or mash the eggplant flesh.", "In a bowl, combine the chopped/mashed eggplant, sliced red onion, and diced tomato.", "Pour in vinegar and fish sauce. Add chilies and spring onions if using.", "Toss gently to combine. Season with salt and pepper to taste.", "Serve chilled or at room temperature."]
+      },
+      {
+        name: "Pinapaitan",
+        image: "",
+        boilingTime: "2-3 hours",
+        cookingTime: "30 minutes",
+        ingredients: ["500g beef or goat tripe, small intestines, liver, heart (mix of internal organs)", "1/4 cup bile (apdo) or bitter gourd juice (ampalaya juice)", "1 thumb-sized ginger, julienned", "1 onion, chopped", "6 cloves garlic, minced", "2-3 green chilies (siling haba), sliced", "4 cups water or beef broth", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["Clean beef/goat internal organs thoroughly. Boil until very tender (2-3 hours). Drain and chop into small pieces. Set aside.", "In a pot, heat oil. Sauté ginger, garlic, and onion until fragrant.", "Add chopped internal organs and sauté for 5-7 minutes.", "Pour in water or beef broth. Bring to a simmer. Add green chilies.", "Add bile or bitter gourd juice, stirring well. Cook for 10-15 minutes for flavors to meld.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Sinigang na Baka",
+        image: "",
+        boilingTime: "2-3 hours",
+        cookingTime: "45 minutes",
+        ingredients: ["1 kg beef ribs or brisket, cut into cubes", "1 pack sinigang mix (tamarind soup base)", "1 onion, quartered", "2 tomatoes, quartered", "1 radish (labanos), sliced", "1 eggplant, sliced", "Long beans (sitaw), cut into 2-inch pieces", "Kangkong (water spinach)", "4-6 cups water or rice washing", "Fish sauce to taste"],
+        steps: ["In a large pot, place beef and water. Bring to a boil and remove scum. Simmer until beef is very tender (2-3 hours).", "Add onion and tomatoes. Simmer for 15 minutes.", "Add sinigang mix and radish. Cook for 5 minutes.", "Add eggplant and long beans. Cook until vegetables are tender-crisp.", "Stir in kangkong leaves and cook for 1-2 minutes.", "Season with fish sauce to taste. Serve hot."]
+      },
+      {
+        name: "Paksiw na Isda",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "20 minutes",
+        ingredients: ["1 whole bangus (milkfish) or any firm white fish, sliced into serving pieces", "1/2 cup vinegar", "1/4 cup water", "1 thumb-sized ginger, julienned", "3 cloves garlic, crushed", "1 onion, sliced", "1 long green chili (siling haba, optional)", "1 small eggplant, sliced (optional)", "Salt and black peppercorns to taste"],
+        steps: ["In a pot, arrange ginger, garlic, onion, and fish slices. Add long green chili and eggplant if using.", "Pour in vinegar and water. Season with salt and black peppercorns.", "Bring to a boil, then lower heat and simmer for 15-20 minutes, or until fish is cooked through and sauce has reduced.", "Do not stir too much during cooking to prevent fish from breaking.", "Serve hot."]
+      },
+      {
+        name: "Grilled Liempo (Pork Belly)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "25 minutes",
+        ingredients: ["500g pork belly (liempo), sliced 1/2-inch thick", "1/2 cup soy sauce", "1/4 cup calamansi juice (or lemon juice)", "1 tbsp minced garlic", "1 tsp black pepper", "1 tbsp brown sugar", "2 tbsp cooking oil"],
+        steps: ["In a bowl, combine soy sauce, calamansi juice, minced garlic, black pepper, brown sugar, and cooking oil. Mix well.", "Add pork belly slices to the marinade, ensuring they are well coated. Marinate for at least 1 hour, preferably overnight.", "Preheat grill to medium-high heat.", "Grill pork belly slices for 5-7 minutes per side, or until cooked through, charred, and tender. Baste occasionally with leftover marinade.", "Serve hot with spiced vinegar or toyomansi dipping sauce."]
+      },
+      {
+        name: "Pancit Palabok",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g bihon (rice vermicelli) noodles", "For the Sauce:", "1/2 cup ground pork", "1/4 cup tinapa (smoked fish) flakes, or tinapa paste", "2 tbsp cooking oil", "1 onion, chopped", "4 cloves garlic, minced", "1/2 cup shrimp broth or water", "2 tbsp annatto powder dissolved in 1/4 cup water", "1/4 cup cornstarch slurry", "Fish sauce to taste", "Salt and pepper", "Garnish:", "Cooked shrimp, hard-boiled eggs (sliced), chicharon (pork cracklings, crushed), spring onions, fried garlic, calamansi"],
+        steps: ["Cook bihon noodles according to package directions. Drain and set aside.", "For the sauce: In a pan, heat oil and sauté garlic and onion until fragrant.", "Add ground pork and cook until browned. Add tinapa flakes/paste and cook for a few minutes.", "Pour in shrimp broth/water and annatto water. Bring to a simmer.", "Slowly pour in cornstarch slurry, stirring constantly until sauce thickens. Season with fish sauce, salt, and pepper.", "To serve: Place cooked noodles on a plate, generously spoon sauce over them. Garnish with shrimp, sliced eggs, chicharon, spring onions, fried garlic, and a squeeze of calamansi."]
+      },
+      {
+        name: "Chicken Afritada",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes",
+        ingredients: ["1 kg chicken pieces", "1 large onion, chopped", "4 cloves garlic, minced", "1 red bell pepper, sliced", "2 potatoes, cubed", "1 carrot, sliced", "1 can (8oz) tomato sauce", "1/2 cup green peas (canned or frozen)", "1/2 cup water or broth", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["In a pot, heat oil. Sauté garlic and onion until fragrant.", "Add chicken and cook until lightly browned.", "Pour in tomato sauce and water/broth. Bring to a simmer.", "Add potatoes and carrots. Cook until chicken is tender and vegetables are almost done.", "Add red bell pepper and green peas. Cook for another 5-7 minutes until vegetables are tender-crisp and sauce has thickened.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Pork Menudo",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "40 minutes",
+        ingredients: ["500g pork, diced", "250g pork liver, diced", "1/2 cup tomato sauce", "1/4 cup soy sauce", "1/4 cup calamansi juice or vinegar", "2 potatoes, cubed", "1 carrot, cubed", "1 red bell pepper, diced", "1 green bell pepper, diced", "1 onion, chopped", "4 cloves garlic, minced", "2 tbsp cooking oil", "1/2 cup garbanzo beans (chickpeas)", "Salt and pepper to taste"],
+        steps: ["Marinate pork in soy sauce and calamansi juice for 30 minutes.", "In a pan, heat oil and sauté onion and garlic until fragrant.", "Add marinated pork and cook until lightly browned.", "Pour in tomato sauce and enough water to cover. Bring to a simmer.", "Add potatoes and carrots. Cook until vegetables are almost tender.", "Add pork liver, bell peppers, and garbanzo beans. Cook until liver is done and sauce has thickened.", "Season with salt and pepper. Serve hot."]
+      },
+      {
+        name: "Pininyahang Manok",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "35 minutes",
+        ingredients: ["1 kg chicken pieces", "1 can (8oz) crushed pineapple with juice", "1/2 cup evaporated milk or coconut milk", "1 onion, chopped", "4 cloves garlic, minced", "1 thumb-sized ginger, julienned", "1 red bell pepper, sliced (optional)", "2 tbsp cooking oil", "Fish sauce or salt to taste"],
+        steps: ["In a pot, heat oil and sauté ginger, garlic, and onion until fragrant.", "Add chicken and cook until lightly browned.", "Pour in crushed pineapple with its juice. Bring to a simmer.", "Cook until chicken is tender (about 20-25 minutes).", "Stir in evaporated milk or coconut milk and sliced red bell pepper (if using). Simmer gently for another 5-7 minutes until sauce thickens.", "Season with fish sauce or salt. Serve hot with rice."]
+      },
+      {
+        name: "La Paz Batchoy",
+        image: "",
+        boilingTime: "1 hour",
+        cookingTime: "30 minutes",
+        ingredients: ["250g fresh miki noodles (egg noodles)", "100g pork belly, boiled and sliced thinly", "100g pork liver, sliced thin", "50g pork cracklings (chicharon), crushed", "4 cups rich pork broth", "1/4 cup pork intestines, boiled and chopped (optional)", "2 cloves garlic, minced and fried for garnish", "1/4 cup chopped spring onions", "Salt and pepper to taste", "Fish sauce for seasoning"],
+        steps: ["Prepare rich pork broth by boiling pork bones for at least 1-2 hours.", "Blanch miki noodles in hot water for 1-2 minutes until tender. Drain.", "In a bowl, arrange blanched noodles, sliced pork belly, pork liver, and pork intestines (if using).", "Pour hot pork broth over the ingredients.", "Garnish generously with fried garlic, crushed chicharon, and chopped spring onions.", "Season with fish sauce, salt, and pepper to taste. Serve immediately."]
+      },
+      {
+        name: "Bistik Tagalog (Pork)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["500g pork sirloin or shoulder, thinly sliced", "1/2 cup soy sauce", "1/4 cup calamansi juice (or lemon juice)", "2 large onions, sliced into rings", "2 tbsp cooking oil", "Salt and black pepper to taste"],
+        steps: ["Marinate pork slices in soy sauce and calamansi juice for at least 30 minutes.", "Heat oil in a pan. Fry half of the onion rings until lightly browned. Remove and set aside for garnish.", "In the same pan, brown pork slices in batches until cooked through. Remove pork and set aside.", "Pour the pork marinade into the pan. Bring to a simmer and let it reduce slightly.", "Return the pork to the pan and cook for 1-2 minutes, coating with the sauce.", "Season with salt and pepper. Arrange pork on a plate and top with the reserved fried onion rings.", "Serve hot with rice."]
+      },
+      {
+        name: "Dinuguan (Pork Blood Stew)",
+        image: "",
+        boilingTime: "20 minutes",
+        cookingTime: "40 minutes",
+        ingredients: ["500g pork (snout, ears, intestines, or lean meat), diced", "2 cups pork blood", "1/2 cup vinegar", "1 onion, chopped", "6 cloves garlic, minced", "2-3 green chilies (siling haba), whole or sliced", "1 thumb-sized ginger, julienned", "2 tbsp cooking oil", "Fish sauce to taste", "Salt and pepper to taste"],
+        steps: ["Boil pork parts until tender. Drain and chop into small pieces. Set aside.", "In a bowl, mix pork blood with a little vinegar to prevent coagulation. Strain if desired.", "In a pot, heat oil. Sauté ginger, garlic, and onion until fragrant.", "Add chopped pork and sauté until lightly browned.", "Pour in remaining vinegar. Let it boil without stirring for 2-3 minutes to cook off the raw vinegar taste.", "Add pork blood, stirring constantly to prevent lumps. Add a little water if too thick.", "Add green chilies. Simmer over low heat, stirring occasionally, until the blood is cooked and the sauce has thickened (about 15-20 minutes).", "Season with fish sauce, salt, and pepper. Serve hot, traditionally with puto (steamed rice cake)."]
+      },
+      {
+        name: "Adobong Manok sa Gata",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "40 minutes",
+        ingredients: ["1 kg chicken pieces", "1/2 cup soy sauce", "1/2 cup vinegar", "1 head garlic, crushed", "1 tsp black peppercorns", "2 bay leaves", "2 cups coconut milk (thick)", "2 tbsp cooking oil", "Salt to taste"],
+        steps: ["In a bowl, marinate chicken in soy sauce, vinegar, crushed garlic, peppercorns, and bay leaves for at least 30 minutes.", "In a pot, heat oil. Brown chicken pieces on all sides.", "Pour in the marinade and coconut milk. Bring to a boil.", "Lower heat, cover, and simmer for 30-35 minutes or until chicken is tender and sauce has thickened and rendered oil.", "Serve hot with rice."]
+      },
+      {
+        name: "Lumpia Hubad (with Peanut Sauce)",
+        image: "",
+        boilingTime: "N/A",
+        cookingTime: "30 minutes",
+        ingredients: ["For the Filling:", "1 cup jicama (singkamas), julienned", "1 cup green beans, julienned", "1 cup carrots, julienned", "1 cup cabbage, shredded", "1/2 cup shrimp, cooked and chopped", "1/2 cup cooked chicken, shredded", "1 onion, chopped", "3 cloves garlic, minced", "1 tbsp soy sauce", "Salt and pepper to taste", "For the Peanut Sauce:", "1/2 cup peanut butter", "1/4 cup soy sauce", "2 tbsp brown sugar", "1 cup water or broth", "Garlic, minced", "Peanuts, crushed, for topping"],
+        steps: ["For the filling: In a pan, sauté garlic and onion. Add chicken and shrimp. Add all vegetables. Season with soy sauce, salt, and pepper. Cook until vegetables are tender-crisp. Set aside.", "For the peanut sauce: In a saucepan, combine peanut butter, soy sauce, brown sugar, water/broth, and minced garlic. Cook over medium heat, stirring constantly, until sauce thickens and is smooth. Add more water if too thick.", "To serve: Place a generous amount of vegetable filling on a plate. Drizzle generously with the prepared peanut sauce. Sprinkle with crushed peanuts.", "This is served 'naked' without a wrapper."]
+      },
+      {
+        name: "Binagoongan Baboy",
+        image: "",
+        boilingTime: "20 minutes",
+        cookingTime: "30 minutes",
+        ingredients: ["500g pork belly, cut into cubes", "1/2 cup bagoong alamang (shrimp paste)", "1 onion, chopped", "4 cloves garlic, minced", "2 tomatoes, diced", "2-3 green chilies (siling haba, optional)", "1/4 cup vinegar (optional)", "1/2 cup water", "2 tbsp cooking oil", "Salt and pepper to taste"],
+        steps: ["In a pot, boil pork belly until tender. Drain and set aside (can also pan-fry until lightly browned for extra crispiness).", "In the same pot or a separate pan, heat oil. Sauté garlic, onion, and tomatoes until soft.", "Add bagoong alamang and sauté for 5-7 minutes, stirring frequently, until fragrant and cooked.", "Add pork belly and stir to coat. If using, add green chilies.", "Pour in water (and vinegar, if using - let it boil without stirring for 2-3 minutes if using vinegar).", "Simmer until sauce thickens and pork is coated. Season with salt and pepper if needed (bagoong is salty).", "Serve hot with rice and often with slices of fresh green mango."]
+      },
+      {
+        name: "Sopas (Classic)",
+        image: "",
+        boilingTime: "10 minutes",
+        cookingTime: "25 minutes",
+        ingredients: ["1 cup elbow macaroni", "200g chicken breast, shredded (boiled)", "1/2 cup sliced hotdogs or ham", "1 small onion, chopped", "3 cloves garlic, minced", "1 cup evaporated milk", "4 cups chicken broth", "1 carrot, diced", "1/2 cup shredded cabbage", "Salt and pepper to taste", "2 tbsp cooking oil"],
+        steps: ["Cook macaroni according to package directions. Drain and set aside.", "In a pot, heat oil. Sauté garlic and onion until fragrant.", "Add shredded chicken and hotdogs/ham. Sauté for a few minutes.", "Pour in chicken broth and bring to a simmer. Add diced carrots and cook until tender-crisp.", "Add cooked macaroni and shredded cabbage. Stir in evaporated milk and bring to a gentle simmer (do not boil rapidly).", "Season with salt and pepper. Serve hot."]
+      }
+    ];
+
+    // Process the recipes array to generate offline images for each entry
+    const offlineRecipes = recipes.map(recipe => {
+      // Create a copy of the recipe object and add the generated image
+      return {
+        ...recipe,
+        image: createOfflineImage(recipe.name)
+      };
+    });
+
+    function renderRecipes(filtered = offlineRecipes) {
+      const container = document.getElementById("recipeList");
+      container.innerHTML = "";
+      if (filtered.length === 0) {
+        container.innerHTML = "<p style='text-align: center;'>No recipes found. Try a different search term!</p>";
+        return;
+      }
+      filtered.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "recipe";
+        div.innerHTML = `
+          <img src="${r.image}" alt="${r.name}" class="recipe-image">
+          <div class="recipe-content">
+            <h2>${r.name}</h2>
+            <p class="section-title">Boiling Time:</p><p>${r.boilingTime}</p>
+            <p class="section-title">Cooking Time:</p><p>${r.cookingTime}</p>
+            <p class="section-title">Ingredients:</p>
+            <ul>${r.ingredients.map(i => `<li>${i}</li>`).join('')}</ul>
+            <p class="section-title">Instructions:</p>
+            <ol>${r.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    document.getElementById("searchBar").addEventListener("input", function () {
+      const q = this.value.toLowerCase();
+      const results = offlineRecipes.filter(r => r.name.toLowerCase().includes(q));
+      renderRecipes(results);
+    });
+
+    window.onload = () => renderRecipes();
+  </script>
+</body>
+</html>
+```
